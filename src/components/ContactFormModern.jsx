@@ -40,9 +40,101 @@ const ContactFormModern = () => {
     });
 
     try {
-      // Simular envio do formulário
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Obter parâmetros UTM da URL atual
+      const urlParams = new URLSearchParams(window.location.search);
       
+      // Tentar obter UTMs do localStorage (persistência de sessão)
+      let storedUTMs = null;
+      try {
+        const utmKeys = Object.keys(localStorage).filter(key => key.startsWith('servitec_'));
+        if (utmKeys.length > 0) {
+          // Buscar o primeiro evento que tenha UTMs
+          for (const key of utmKeys.slice().reverse()) {
+            try {
+              const stored = JSON.parse(localStorage.getItem(key));
+              if (stored && stored.utm && Object.keys(stored.utm).length > 0) {
+                storedUTMs = stored.utm;
+                break;
+              }
+            } catch (e) {
+              continue;
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Erro ao buscar UTMs do localStorage:', e);
+      }
+
+      // Priorizar UTMs da URL, caso contrário usar do localStorage
+      const utmParams = {
+        utm_source: urlParams.get('utm_source') || storedUTMs?.utm_source || null,
+        utm_medium: urlParams.get('utm_medium') || storedUTMs?.utm_medium || null,
+        utm_campaign: urlParams.get('utm_campaign') || storedUTMs?.utm_campaign || null,
+        utm_term: urlParams.get('utm_term') || storedUTMs?.utm_term || null,
+        utm_content: urlParams.get('utm_content') || storedUTMs?.utm_content || null,
+      };
+
+      // Obter dados de sessão completos
+      const sessionData = {
+        screenResolution: `${window.screen.width}x${window.screen.height}`,
+        language: navigator.language,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        platform: navigator.platform,
+        cookieEnabled: navigator.cookieEnabled,
+        onLine: navigator.onLine,
+      };
+
+      // Preparar dados para o webhook com todas as informações possíveis
+      const leadData = {
+        // Dados do formulário
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        service: data.service,
+        message: data.message,
+        
+        // Informações de tracking
+        timestamp: new Date().toISOString(),
+        source: 'website_form',
+        page: window.location.pathname,
+        url: window.location.href,
+        referrer: document.referrer || null,
+        
+        // UTMs
+        utm_source: utmParams.utm_source,
+        utm_medium: utmParams.utm_medium,
+        utm_campaign: utmParams.utm_campaign,
+        utm_term: utmParams.utm_term,
+        utm_content: utmParams.utm_content,
+        
+        // Dados de sessão
+        userAgent: navigator.userAgent,
+        screenResolution: sessionData.screenResolution,
+        language: sessionData.language,
+        timezone: sessionData.timezone,
+        platform: sessionData.platform,
+        cookieEnabled: sessionData.cookieEnabled,
+        online: sessionData.onLine,
+        
+        // Informações adicionais
+        viewport: `${window.innerWidth}x${window.innerHeight}`,
+        title: document.title,
+      };
+
+      // Enviar dados para o webhook
+      const webhookResponse = await fetch('https://dev-manager-01-n8n.ekupxt.easypanel.host/webhook/leads', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(leadData)
+      });
+
+      // Verificar se o envio foi bem-sucedo (não bloqueia o fluxo mesmo se falhar)
+      if (!webhookResponse.ok) {
+        console.warn('Erro ao enviar para webhook:', webhookResponse.status);
+      }
+
       // Criar mensagem para WhatsApp
       const message = `Olá! Gostaria de solicitar um orçamento:
 
@@ -75,11 +167,32 @@ Aguardo retorno!`;
       setSubmitStatus('success');
       reset();
     } catch (error) {
+      console.error('Erro ao processar formulário:', error);
       trackEvent('form_submit_error', {
         error: error.message,
         form_type: 'contact'
       });
-      setSubmitStatus('error');
+      
+      // Mesmo se houver erro no webhook, ainda redireciona para WhatsApp
+      try {
+        const message = `Olá! Gostaria de solicitar um orçamento:
+
+Nome: ${data.name}
+E-mail: ${data.email}
+Telefone: ${data.phone}
+Serviço desejado: ${data.service}
+Mensagem: ${data.message}
+
+Aguardo retorno!`;
+
+        const encodedMessage = encodeURIComponent(message);
+        const whatsappUrl = `https://wa.me/5592991502637?text=${encodedMessage}`;
+        window.open(whatsappUrl, '_blank');
+        setSubmitStatus('success');
+        reset();
+      } catch (whatsappError) {
+        setSubmitStatus('error');
+      }
     } finally {
       setIsSubmitting(false);
     }
