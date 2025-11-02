@@ -121,19 +121,37 @@ const ContactFormModern = () => {
         title: document.title,
       };
 
-      // Enviar dados para o webhook
-      const webhookResponse = await fetch('https://dev-manager-01-n8n.ekupxt.easypanel.host/webhook/leads', {
+      // Enviar dados para o webhook de forma assíncrona (não bloqueia o fluxo)
+      // Usar Promise que não bloqueia para não esperar a resposta
+      fetch('https://dev-manager-01-n8n.ekupxt.easypanel.host/webhook/leads', {
         method: 'POST',
+        mode: 'cors', // Tenta com CORS primeiro
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(leadData)
+      }).then(response => {
+        if (!response.ok) {
+          console.warn('Webhook respondeu com erro:', response.status);
+        } else {
+          console.log('Lead enviado para webhook com sucesso');
+        }
+      }).catch(error => {
+        // Se falhar por CORS, tenta método alternativo
+        console.warn('Erro ao enviar para webhook (CORS possivelmente):', error.message);
+        
+        // Tentativa alternativa usando fetch com no-cors (não retorna resposta, mas pode funcionar)
+        fetch('https://dev-manager-01-n8n.ekupxt.easypanel.host/webhook/leads', {
+          method: 'POST',
+          mode: 'no-cors', // Não requer CORS, mas não permite ler resposta
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(leadData)
+        }).catch(() => {
+          console.warn('Webhook não acessível (CORS bloqueado no servidor)');
+        });
       });
-
-      // Verificar se o envio foi bem-sucedo (não bloqueia o fluxo mesmo se falhar)
-      if (!webhookResponse.ok) {
-        console.warn('Erro ao enviar para webhook:', webhookResponse.status);
-      }
 
       // Criar mensagem para WhatsApp
       const message = `Olá! Gostaria de solicitar um orçamento:
