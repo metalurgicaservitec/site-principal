@@ -47,6 +47,105 @@ const WhatsAppPopup = ({ isOpen, onClose, buttonText = "Peça seu Orçamento", s
       // Formatar telefone
       const formattedPhone = formatPhone(formData.phone);
       
+      // Obter parâmetros UTM da URL atual
+      const urlParams = new URLSearchParams(window.location.search);
+      
+      // Tentar obter UTMs do localStorage (persistência de sessão)
+      let storedUTMs = null;
+      try {
+        const utmKeys = Object.keys(localStorage).filter(key => key.startsWith('servitec_'));
+        if (utmKeys.length > 0) {
+          // Buscar o primeiro evento que tenha UTMs
+          for (const key of utmKeys.slice().reverse()) {
+            try {
+              const stored = JSON.parse(localStorage.getItem(key));
+              if (stored && stored.utm && Object.keys(stored.utm).length > 0) {
+                storedUTMs = stored.utm;
+                break;
+              }
+            } catch (e) {
+              continue;
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Erro ao buscar UTMs do localStorage:', e);
+      }
+
+      // Priorizar UTMs da URL, caso contrário usar do localStorage
+      const utmParams = {
+        utm_source: urlParams.get('utm_source') || storedUTMs?.utm_source || null,
+        utm_medium: urlParams.get('utm_medium') || storedUTMs?.utm_medium || null,
+        utm_campaign: urlParams.get('utm_campaign') || storedUTMs?.utm_campaign || null,
+        utm_term: urlParams.get('utm_term') || storedUTMs?.utm_term || null,
+        utm_content: urlParams.get('utm_content') || storedUTMs?.utm_content || null,
+      };
+
+      // Obter dados de sessão completos
+      const sessionData = {
+        screenResolution: `${window.screen.width}x${window.screen.height}`,
+        language: navigator.language,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        platform: navigator.platform,
+        cookieEnabled: navigator.cookieEnabled,
+        onLine: navigator.onLine,
+      };
+
+      // Preparar dados para o webhook com todas as informações possíveis
+      const leadData = {
+        // Dados do formulário
+        name: formData.name.trim(),
+        phone: formData.phone.trim(),
+        email: null,
+        service: serviceName || 'Não especificado',
+        message: `Atendimento prioritário via popup - Serviço: ${serviceName || 'Não especificado'}`,
+        
+        // Informações de tracking
+        timestamp: new Date().toISOString(),
+        source: 'whatsapp_popup',
+        page: window.location.pathname,
+        url: window.location.href,
+        referrer: document.referrer || null,
+        
+        // UTMs
+        utm_source: utmParams.utm_source,
+        utm_medium: utmParams.utm_medium,
+        utm_campaign: utmParams.utm_campaign,
+        utm_term: utmParams.utm_term,
+        utm_content: utmParams.utm_content,
+        
+        // Dados de sessão
+        userAgent: navigator.userAgent,
+        screenResolution: sessionData.screenResolution,
+        language: sessionData.language,
+        timezone: sessionData.timezone,
+        platform: sessionData.platform,
+        cookieEnabled: sessionData.cookieEnabled,
+        online: sessionData.onLine,
+        
+        // Informações adicionais
+        viewport: `${window.innerWidth}x${window.innerHeight}`,
+        title: document.title,
+      };
+
+      // Enviar dados para o webhook
+      try {
+        const webhookResponse = await fetch('https://dev-manager-01-n8n.ekupxt.easypanel.host/webhook/leads', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(leadData)
+        });
+
+        if (!webhookResponse.ok) {
+          console.warn('Erro ao enviar para webhook:', webhookResponse.status);
+        }
+      } catch (webhookError) {
+        console.warn('Erro ao enviar para webhook:', webhookError);
+        // Não bloqueia o fluxo se o webhook falhar
+      }
+      
       // Criar mensagem personalizada
       const serviceText = serviceName ? ` para o serviço: ${serviceName}` : '';
       const message = `Olá! Meu nome é ${formData.name.trim()} e meu telefone é ${formData.phone.trim()}. Gostaria de solicitar um atendimento prioritário para orçamento${serviceText}.`;
