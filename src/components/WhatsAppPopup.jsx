@@ -16,23 +16,6 @@ const WhatsAppPopup = ({ isOpen, onClose, buttonText = "Peça seu Orçamento", s
     }));
   };
 
-  const formatPhone = (phone) => {
-    // Remove todos os caracteres não numéricos
-    const numbers = phone.replace(/\D/g, '');
-    
-    // Se começar com 0, remove
-    if (numbers.startsWith('0')) {
-      return numbers.substring(1);
-    }
-    
-    // Se não começar com 55, adiciona
-    if (!numbers.startsWith('55')) {
-      return '55' + numbers;
-    }
-    
-    return numbers;
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -44,9 +27,6 @@ const WhatsAppPopup = ({ isOpen, onClose, buttonText = "Peça seu Orçamento", s
     setIsSubmitting(true);
 
     try {
-      // Formatar telefone
-      const formattedPhone = formatPhone(formData.phone);
-      
       // Obter parâmetros UTM da URL atual
       const urlParams = new URLSearchParams(window.location.search);
       
