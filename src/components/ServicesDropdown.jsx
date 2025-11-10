@@ -1,6 +1,5 @@
 import React from 'react';
 import { DropdownMenu } from './ui/dropdown-menu';
-import { ServiceAppearTransition } from './ui/page-transition';
 import { 
   Building, 
   Wrench, 
